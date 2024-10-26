@@ -12,6 +12,14 @@
 
 struct io_uring ring;
 
+enum request_types {
+	EVENT_ACCEPT
+};
+
+struct request {
+	int event_type;
+};
+
 void fatal_error(char * error_message) {
 	perror(error_message);
 	exit(0);
@@ -54,8 +62,35 @@ void sigint_handler(int signo) {
     exit(0);
 }
 
-void main_server_loop() {
+
+void add_accept_request(int server_socket_fd,  
+						struct sockaddr_in *client_addr, 
+						socklen_t *client_addr_len) {
+
+	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+
+	io_uring_prep_accept(sqe, server_socket_fd,  (struct sockaddr *) client_addr,
+						 client_addr_len, 0);
 	
+	struct request *req = malloc(sizeof(*req));
+	req -> event_type = EVENT_ACCEPT;
+
+	io_uring_sqe_set_data(sqe, req);
+	io_uring_submit(&ring);
+}
+
+void main_server_loop(int server_socket_fd) {
+	struct io_uring_cqe *cqe;
+	struct sockaddr_in client_addr;
+	socklen_t client_addr_len = sizeof(client_addr);
+
+	add_accept_request(server_socket_fd, &client_addr, &client_addr_len);
+
+	while (1) {
+		
+
+
+	}
 }
 
 
