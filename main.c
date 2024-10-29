@@ -10,15 +10,20 @@
 #define PORT_NUMBER 8889
 #define MAX_CONNECTIONS 1000
 #define QUEUE_DEPTH 256
+#define READ_SZ  8192
 
 struct io_uring ring;
 
 enum request_types {
-	EVENT_TYPE_ACCEPT
+	EVENT_TYPE_ACCEPT,
+	EVENT_TYPE_READ, // we read from the client socket 
+	EVENT_TYPE_WRITE // we write to the client socket
 };
 
 struct request {
 	int event_type;
+	int client_socket_fd;
+	size_t *buffer;
 };
 
 void fatal_error(char * error_message) {
@@ -80,6 +85,19 @@ void add_accept_request(int server_socket_fd,
 	io_uring_submit(&ring);
 }
 
+void add_read_request(int client_socket_fd) {
+	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+
+	struct request *req = malloc(sizeof(*req));
+	req -> event_type = EVENT_TYPE_READ;
+	req -> client_socket_fd = client_socket_fd;
+	req -> buffer = malloc(READ_SZ);
+
+	io_uring_prep_read(sqe, client_socket_fd, req -> buffer, READ_SZ, 0);
+	io_uring_sqe_set_data(sqe, req);
+	io_uring_submit(&ring);
+}
+
 void main_server_loop(int server_socket_fd) {
 	struct sockaddr_in client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
@@ -97,14 +115,20 @@ void main_server_loop(int server_socket_fd) {
 
 			if (cqe -> res < 0) {
 				fprintf(stderr, "Async request failed: %s for event: %d\n",
-							strerror(-cqe -> res), cqe -> event_type);
+							strerror(-cqe -> res), req -> event_type);
 				exit(1); // necessary to exit?
 			}
 
 			switch (req -> event_type) {
 				case EVENT_TYPE_ACCEPT:
-					
-
+					add_accept_request(server_socket_fd, &client_addr, &client_addr_len);
+					add_read_request(cqe -> res);
+					free(req);
+					break;
+				
+				case EVENT_TYPE_READ:
+					add_write_request();
+					break;
 
 			}
 
