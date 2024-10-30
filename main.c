@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <ctype.h>
 
 #define PORT_NUMBER 8889
 #define MAX_CONNECTIONS 1000
@@ -23,7 +24,7 @@ enum request_types {
 struct request {
 	int event_type;
 	int client_socket_fd;
-	size_t *buffer;
+	char *buffer;
 };
 
 void fatal_error(char * error_message) {
@@ -98,6 +99,56 @@ void add_read_request(int client_socket_fd) {
 	io_uring_submit(&ring);
 }
 
+int get_first_line(char *src, char *dest, int dest_size) {
+	for (int i = 0; i < dest_size - 1; i++) { // dest_size is same as src_size
+		dest[i] = src[i];
+		if (src[i] == '\r' && src[i+1] == '\n') {
+			break;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+void strtolower(char *str) {
+    for (; *str; ++str)
+        *str = (char)tolower(*str);
+}
+
+void handle_get_method(char *path, int client_socket_fd) {
+	
+}
+
+void handle_unimplemented_method(int client_socket_fd) {
+
+}
+
+void handle_http_request(char *request_buffer, int client_socket_fd) {
+	char *method, *path, *saveptr;
+
+    method = strtok_r(request_buffer, " ", &saveptr); //splits string by 2nd arg
+	strtolower(method);
+	path = strtok_r(NULL, " ", &saveptr); // reentrant version of strtok
+
+	if (strcmp(method, "get") == 0) {
+		handle_get_method(path, client_socket_fd);
+	} else {
+		handle_unimplemented_method(client_socket_fd);
+	}
+}
+
+void add_write_request(struct request *req) {
+	char http_request[1024];
+	
+	if (get_first_line(req -> buffer, http_request, 1024)) {
+		fprintf(stderr, "Malformed http request!");
+	}
+
+	handle_http_request(http_request, req -> client_socket_fd);
+
+}
+
 void main_server_loop(int server_socket_fd) {
 	struct sockaddr_in client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
@@ -122,12 +173,26 @@ void main_server_loop(int server_socket_fd) {
 			switch (req -> event_type) {
 				case EVENT_TYPE_ACCEPT:
 					add_accept_request(server_socket_fd, &client_addr, &client_addr_len);
+					// cqe -> res currently holds the read file 
 					add_read_request(cqe -> res);
 					free(req);
 					break;
 				
 				case EVENT_TYPE_READ:
-					add_write_request();
+					// cqe -> res currently holds the amount of bytes read in read syscall
+					
+					if (cqe -> res == 0) {
+						fprintf(stderr, "Empty request! \n");
+						// free(req);
+						break;
+					}
+
+					add_write_request(req);
+
+					
+
+
+
 					break;
 
 			}
