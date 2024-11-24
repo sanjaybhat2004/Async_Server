@@ -13,6 +13,8 @@
 #define QUEUE_DEPTH 256
 #define READ_SZ  8192
 
+char *home_page_path = "public/index.html";
+
 struct io_uring ring;
 
 enum request_types {
@@ -116,8 +118,19 @@ void strtolower(char *str) {
         *str = (char)tolower(*str);
 }
 
+void send_static_content(char *page_path, int client_socket_fd) {
+	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+
+	struct request *req = malloc(sizeof(*req));
+	req -> event_type = EVENT_TYPE_WRITE;
+	req -> 
+
+}
+
 void handle_get_method(char *path, int client_socket_fd) {
-	
+	if (strcmp(path, "/") == 0) {
+		send_static_content(home_page_path, client_socket_fd);
+	}
 }
 
 void handle_unimplemented_method(int client_socket_fd) {
@@ -138,7 +151,7 @@ void handle_http_request(char *request_buffer, int client_socket_fd) {
 	}
 }
 
-void add_write_request(struct request *req) {
+void handle_write_request(struct request *req) {
 	char http_request[1024];
 	
 	if (get_first_line(req -> buffer, http_request, 1024)) {
@@ -187,7 +200,7 @@ void main_server_loop(int server_socket_fd) {
 						break;
 					}
 
-					add_write_request(req);
+					handle_write_request(req);
 
 					
 
